@@ -1,0 +1,67 @@
+import React, { useState } from 'react';
+import { View, Button, Text } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { openDatabase } from 'expo-sqlite'; // Use expo-sqlite for compatibility
+
+const db = openDatabase('test.db');
+
+const App = () => {
+  const [data, setData] = useState([]);
+
+  const handleFilePick = async () => {
+    try {
+      const file = await DocumentPicker.getDocumentAsync({ type: 'text/csv' });
+      if (file.type === 'success') {
+        const { uri } = file;
+        fetch(uri)
+          .then(response => response.text())
+          .then(text => {
+            const parsedData = text.split('\n').map(line => line.split(','));
+            setData(parsedData);
+          })
+          .catch(error => console.error('Error parsing CSV:', error));
+      }
+    } catch (error) {
+      console.error('Error picking file:', error);
+    }
+  };
+
+  const handleImportData = () => {
+    db.transaction(tx => {
+      tx.executeSql(
+        'CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT)'
+      );
+      data.forEach(([name, email]) => {
+        tx.executeSql(
+          'INSERT INTO users (name, email) VALUES (?, ?)',
+          [name, email],
+          (_, { rowsAffected }) => console.log('Rows affected:', rowsAffected),
+          (_, error) => console.error('Error inserting data:', error)
+        );
+      });
+    });
+  };
+
+  const handleDeleteData = () => {
+    db.transaction(tx => {
+      tx.executeSql('DELETE FROM users', [], (_, { rowsAffected }) => {
+        console.log('Rows deleted:', rowsAffected);
+      });
+    });
+  };
+
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <Button title="Pick CSV File" onPress={handleFilePick} />
+      <Button title="Import Data" onPress={handleImportData} disabled={!data.length} />
+      <Button title="Delete Data" onPress={handleDeleteData} />
+      {data.map((row, index) => (
+        <View key={index}>
+          <Text>{JSON.stringify(row)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+};
+
+export default App;
